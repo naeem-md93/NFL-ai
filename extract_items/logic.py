@@ -92,7 +92,7 @@ def get_response(system_prompt, user_text, user_image):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": [
                     {"type": "text", "text": user_text},
-                    {"type": "input_image", "data": user_image}
+                    {"type": "image_url", "image_url": {"url": user_image}}
                 ]},
             ],
             "temperature": 0,
@@ -103,6 +103,7 @@ def get_response(system_prompt, user_text, user_image):
         resp = resp["choices"][0]["message"]["content"]
         resp = resp.replace("```json", "").replace("```", "")
         resp = json.loads(resp)
+        print(resp)
     except Exception as e:
         print(resp)
         print(repr(e))
@@ -110,10 +111,11 @@ def get_response(system_prompt, user_text, user_image):
     return resp
 
 
-def extract_items_from_image(raw, width, height, mime_type):
+def extract_items_from_image(file_obj):
 
-    data_uri = utils.to_data_uri(raw, mime_type=mime_type)
-
+    (width, height) = file_obj.image.size
+    data_uri = utils.get_image_data_uri(file_obj)
+    
     result = get_response(
         SYSTEM_PROMPT,
         USER_PROMPT.format(
