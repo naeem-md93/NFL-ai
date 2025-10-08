@@ -5,6 +5,8 @@ import requests
 from PIL import Image
 from io import BytesIO
 
+from . import utils
+
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_MODEL_NAME = os.getenv("OPENROUTER_MODEL_NAME")
@@ -19,15 +21,15 @@ Important rules:
 - The JSON must be a top-level array of objects. Each object must contain exactly these keys: "type", "description", "bbox".
 - "type" must be either the string "shirt" or "pants".
 - "description" must be a concise factual textual description (6–18 words) of the garment, mentioning visible attributes such as color, pattern, sleeve length or pant cut when discernible.
-- "bbox" must be normalized coordinates in [0.0, 1.0]: `[x0, y0, w, h]` where:
-  - x0,y0 are the top-left corner relative to the original image (0.0 = left or top, 1.0 = right or bottom),
+- "bbox" must be normalized coordinates in [0.0, 1.0]: `[x, y, w, h]` where:
+  - x,y are the top-left corner relative to the original image (0.0 = left or top, 1.0 = right or bottom),
   - w and h are width and height as fractions of the original image width/height.
   - All numbers must be floats formatted with **three decimal places** (for example `0.123`).
 - Coordinates must follow image convention: origin (0,0) at top-left, x to right, y down.
 - Compute normalized values relative to the original image size. If `image_width` and `image_height` metadata are provided, use those dimensions; otherwise use the visual image dimensions available to you.
 - Do not invent garments not visually present. If a detected garment is ambiguous (e.g., partially occluded), include it only if you are reasonably certain. Do not output confidence fields — only items you are confident about.
 - If no shirts or pants are detected, output an empty array: `[]`.
-- **Do not return duplicate or near-duplicate garments.** Merge highly overlapping detections into a single item (e.g., if two detections have IoU > 0.5, return one merged detection). Avoid returning multiple boxes for the same visible garment.
+- **Do not return duplicate garments.** Avoid returning multiple boxes for the same visible garment.
 - Keep each "description" factual and avoid subjective claims (e.g., don't guess brand or exact material unless visually obvious).
 
 You will receive:
@@ -39,7 +41,7 @@ Task:
 Detect garment items of type "shirt" or "pants" visible in the image. For each detected garment return an object with:
 - "type": "shirt" or "pants"
 - "description": a concise factual description (6–18 words) including visible color, pattern, sleeve length or pant cut when discernible
-- "bbox": normalized `[x0, y0, w, h]` as described above (floats with 3 decimal places)
+- "bbox": normalized `[x, y, w, h]` as described above (floats with 3 decimal places)
 
 INPUT:
 Caption: "{{caption_text}}" or ""
@@ -62,7 +64,7 @@ Return only a JSON array like:
 ]
 
 Notes:
-- Every bbox must be normalized (0.000 - 1.000) and given as [x0, y0, w, h] with three decimal digits.
+- Every bbox must be normalized (0.000 - 1.000) and given as [x, y, w, h] with three decimal digits.
 - Do not include any extra keys, metadata, or text — only the specified array of objects.
 - If multiple detected boxes overlap heavily (near-duplicates), merge them and return a single representative detection.
 - If you must assume image dimensions because metadata is absent, compute normalization relative to the image you were given and state nothing — just output the normalized bboxes as required.
@@ -76,47 +78,48 @@ Caption: {caption_text}
 
 
 def get_response(system_prompt, user_text, user_image):
-    resp = requests.post(
-        url="https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        data=json.dumps({
-        "model": OPENROUTER_MODEL_NAME,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": [
-                {"type": "text", "text": user_text},
-                {"type": "image_url", "image_url": {"url": user_image}}
-            ]},
-        ],
-        "temperature": 0,
-        })
-    )
 
-    resp = resp.json()
-    resp = resp["choices"][0]["message"]["content"]
-    resp = resp.replace("```json", "").replace("```", "")
-    resp = json.loads(resp)
+    try:
+        resp = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            data=json.dumps({
+            "model": OPENROUTER_MODEL_NAME,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": [
+                    {"type": "text", "text": user_text},
+                    {"type": "input_image", "data": user_image}
+                ]},
+            ],
+            "temperature": 0,
+            })
+        )
 
+        resp = resp.json()
+        resp = resp["choices"][0]["message"]["content"]
+        resp = resp.replace("```json", "").replace("```", "")
+        resp = json.loads(resp)
+    except Exception as e:
+        print(resp)
+        print(repr(e))
+        resp = []
     return resp
 
 
-def to_base64_nodata_prefix(raw_bytes):
-    """Return base64 string with no data URI prefix and no newlines."""
-    b64 = base64.b64encode(raw_bytes).decode("utf-8")
-    return b64.replace("\n", "")
+def extract_items_from_image(raw, width, height, mime_type):
 
-
-def extract_items_from_image(raw, width, height):
-
-    b64 = to_base64_nodata_prefix(raw)
-    data_uri = f"data:image/jpeg;base64,{b64}"
+    data_uri = utils.to_data_uri(raw, mime_type=mime_type)
 
     result = get_response(
         SYSTEM_PROMPT,
-        USER_PROMPT.format(caption_text="", image_metadata={"image_width": width, "image_height": height}),
+        USER_PROMPT.format(
+            caption_text="",
+            image_metadata={"image_width": width, "image_height": height}
+        ),
         data_uri
     )
 

@@ -7,31 +7,31 @@ from . import utils
 from .logic import extract_items_from_image
 
 
-SEREVR_URL = os.getenv("SEREVR_URL")
+SERVER_URL = os.getenv("SERVER_URL")
 
 
-class ExtractItemsFromImageView(APIView):
+class ExtractItemsView(APIView):
     parser_classes = APIView.parser_classes  # keeps default; DRF handles multipart
 
     def post(self, request):
-        file = request.FILES.get('file')
-        print(vars(file))
 
-        if not file:
-            return Response({'detail': 'No files provided'}, status=status.HTTP_400_BAD_REQUEST)
+        width = int(request.data["width"])
+        height = int(request.data["height"])
+        mime_type = request.data["mime_type"]
+        file = request.FILES["file"]
 
-        i_raw, i_image, i_width, i_height = utils.byte_to_pillow(file)
-        resp = extract_items_from_image(i_raw, i_width, i_height)
+        resp = extract_items_from_image(file, width, height, mime_type)
 
-        cropped_items = []
+        items = []
         for r in resp:
-            cropped_items.append({
+            items.append({
                 "type": r["type"],
                 "caption": r["description"],
-                "bbox_x0": r["bbox"][0],
-                "bbox_y0": r["bbox"][1],
-                "bbox_w": r["bbox"][2],
-                "bbox_h": r["bbox"][3],
+                "box_x": r["bbox"][0],
+                "box_y": r["bbox"][1],
+                "box_w": r["bbox"][2],
+                "box_h": r["bbox"][3],
             })
+        print(items)
 
-        return Response(cropped_items, status=status.HTTP_200_OK)
+        return Response(items, status=status.HTTP_200_OK)

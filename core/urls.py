@@ -17,10 +17,9 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
-from extract_items.views import ExtractItemsFromImageView
+from extract_items.views import ExtractItemsView
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path("api/ai/extract-items/", view=ExtractItemsFromImageView.as_view()),
+    path("api/ai/extract-items/", view=ExtractItemsView.as_view()),
 ]

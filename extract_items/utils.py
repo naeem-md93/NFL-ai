@@ -1,16 +1,7 @@
-import io
-from PIL import Image
+import base64
 
 
-def byte_to_pillow(image_bytes):
-    raw = image_bytes.read()
-    image = Image.open(io.BytesIO(raw))
-    return raw, image, image.width, image.height
-
-
-def pillow_to_byte(image):
-    out = io.BytesIO()
-    image.save(out, format="JPEG", optimize=True, quality=90)
-    out.seek(0)
-    out = out.getvalue()
-    return out
+def to_data_uri(uploaded_file, mime_type="image/jpeg"):
+    uploaded_file.seek(0)
+    b64 = base64.b64encode(uploaded_file.read()).decode("utf-8")
+    return f"data:{mime_type};base64,{b64}"
