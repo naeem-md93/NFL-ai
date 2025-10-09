@@ -18,8 +18,10 @@ from django.contrib import admin
 from django.urls import path
 
 from extract_items.views import ExtractItemsView
+from recommendation.views import RecommendationView
 
 
 urlpatterns = [
     path("api/ai/extract-items/", view=ExtractItemsView.as_view()),
+    path("api/ai/recommendations/", view=RecommendationView.as_view())
 ]
